@@ -1,29 +1,36 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
+require('dotenv').config();
+
 const app = express();
-require("dotenv").config();
-const cookieParser = require("cookie-parser");
-const authRoute = require("./Routes/AuthRoute.js");
-const {MONGO_URL,PORT} = process.env;
+
+const authRoute = require('./Routes/AuthRoute.js');
+
+const { MONGO_URL } = process.env;
+const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 app.use(cookieParser());
 
 app.use(
-    cors({
-        origin:["http://localhost:4000","http://localhost:5173"],
-        methods:["GET","PUT","POST","DELETE"],
-        credentials:true,
-    })
+  cors({
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:4000',
+    ],
+    methods: ['GET', 'PUT', 'POST', 'DELETE'],
+    credentials: true,
+  })
 );
 
-app.use('/',authRoute);
+app.use('/', authRoute);
 
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
-    message: "Route not found.",
+    message: 'Route not found.',
   });
 });
 
@@ -32,19 +39,25 @@ app.use((err, req, res, next) => {
 
   return res.status(500).json({
     success: false,
-    message: "Internal Server Error.",
+    message: 'Internal Server Error.',
   });
 });
 
-mongoose
-  .connect(process.env.MONGO_URL)
-  .then(() => {
-    console.log("MongoDB connected successfully.");
+console.log('Testing MongoDB connection...');
 
-    app.listen(PORT, () => {
+mongoose
+  .connect(MONGO_URL, {
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
+  })
+  .then(() => {
+    console.log('MongoDB connected successfully.');
+
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is listening on port ${PORT}`);
     });
   })
   .catch((err) => {
-    console.error("MongoDB Connection Error:", err);
+    console.error('MongoDB Connection Error:');
+    console.error(err.message);
   });
