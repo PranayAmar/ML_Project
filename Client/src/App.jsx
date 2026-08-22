@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Route, Routes } from "react-router-dom";
-import { Login, Signup, Home } from "./Pages";
+import { useState } from 'react';
+import { Route, Routes } from 'react-router-dom';
+import { Login, Signup, Home } from './Pages';
+import Predictions from './Pages/Predictions';
 //import "./App.css";
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/predictions" element={<Predictions />} />
       </Routes>
     </div>
   );
