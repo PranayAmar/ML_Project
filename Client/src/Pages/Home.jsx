@@ -14,13 +14,12 @@ const Home = () => {
     const verifyUser = async () => {
       try {
         const { data } = await axios.post(
-          "http://localhost:4000",
-          {},
-          {
-            withCredentials: true,
-          }
-        );
-
+  "https://ml-project-d6va.onrender.com",
+  {},
+  {
+    withCredentials: true,
+  }
+);
         const { success, username } = data;
 
         if (!success) {
