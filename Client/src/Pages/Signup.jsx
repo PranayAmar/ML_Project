@@ -41,7 +41,7 @@ const Signup = () => {
 
     try {
       const { data } = await axios.post(
-        "http://localhost:4000/signup",
+     "https://ml-project-d6va.onrender.com/signup",
         {
           email,
           username,
