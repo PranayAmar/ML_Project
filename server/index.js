@@ -26,7 +26,8 @@ app.use(
   })
 );
 
-app.use('/', authRoute);
+app.use("/", authRoute);
+app.use("/", predictionRoute);
 
 app.use((req, res) => {
   return res.status(404).json({
