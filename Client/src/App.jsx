@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Login, Signup, Home } from './Pages';
-import Predictions from './Pages/Predictions';
+import Predictions from "./Pages/predictions";
 //import "./App.css";
 
 function App() {
