@@ -7,6 +7,7 @@ require('dotenv').config();
 const app = express();
 
 const authRoute = require('./Routes/AuthRoute.js');
+const predictionRoute = require("./Routes/PredictionRoute.js");
 
 const { MONGO_URL } = process.env;
 const PORT = process.env.PORT || 4000;
