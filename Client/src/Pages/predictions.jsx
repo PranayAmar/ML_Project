@@ -30,19 +30,6 @@ const handlePrediction = async (e) => {
     console.error("Prediction Error:", error);
   }
 };
-
-    console.log("Prediction Response:", data);
-  } catch (error) {
-    console.error("Prediction Error:", error);
-  }
-};
-    console.log("Prediction Response:", data);
-
-  } catch (error) {
-    console.error("Prediction Error:", error);
-  }
-};
-
   return (
     <div className="min-h-screen bg-[#020617] text-white flex">
 
