@@ -13,10 +13,6 @@ const handlePrediction = async (e) => {
   e.preventDefault();
 
   try {
-  const handlePrediction = async (e) => {
-  e.preventDefault();
-
-  try {
     const { data } = await axios.post(
       "https://ml-project-d6va.onrender.com/predict",
       {
@@ -28,6 +24,12 @@ const handlePrediction = async (e) => {
         withCredentials: true,
       }
     );
+
+    console.log("Prediction Response:", data);
+  } catch (error) {
+    console.error("Prediction Error:", error);
+  }
+};
 
     console.log("Prediction Response:", data);
   } catch (error) {
