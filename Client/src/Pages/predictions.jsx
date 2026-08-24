@@ -9,16 +9,28 @@ const Predictions = () => {
   const [forecastDays, setForecastDays] = useState("7");
   const [dataset, setDataset] = useState("");
 
-  const handlePrediction = (e) => {
-    e.preventDefault();
+const handlePrediction = async (e) => {
+  e.preventDefault();
 
-    // ML API will be connected here later.
-    console.log({
-      product,
-      forecastDays,
-      dataset,
-    });
-  };
+  try {
+    const { data } = await axios.post(
+      "YOUR_RENDER_BACKEND_URL/predict",
+      {
+        product,
+        dataset,
+        forecastDays,
+      },
+      {
+        withCredentials: true,
+      }
+    );
+
+    console.log("Prediction Response:", data);
+
+  } catch (error) {
+    console.error("Prediction Error:", error);
+  }
+};
 
   return (
     <div className="min-h-screen bg-[#020617] text-white flex">
