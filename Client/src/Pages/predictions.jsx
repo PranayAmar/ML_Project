@@ -4,7 +4,7 @@ import axios from "axios";
 
 const Predictions = () => {
   const navigate = useNavigate();
-
+  
   const [product, setProduct] = useState("");
   const [forecastDays, setForecastDays] = useState("7");
   const [dataset, setDataset] = useState("");
