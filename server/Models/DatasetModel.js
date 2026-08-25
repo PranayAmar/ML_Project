@@ -1,7 +1,18 @@
 const mongoose = require("mongoose");
-
 const datasetSchema = new mongoose.Schema(
   {
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     date: {
       type: Date,
       required: true,
@@ -12,7 +23,7 @@ const datasetSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-
+    
     category: {
       type: String,
       required: true,
