@@ -4,10 +4,11 @@ const bcrypt = require("bcrypt");
 
 const cookieOptions = {
   httpOnly: true,
-  sameSite: "lax",
-  secure: process.env.NODE_ENV === "production",
-  maxAge: 24 * 60 * 60 * 1000, // 1 day
+  sameSite: "none",
+  secure: true,
+  maxAge: 24 * 60 * 60 * 1000,
 };
+
 
 module.exports.Signup = async (req, res) => {
   try {
