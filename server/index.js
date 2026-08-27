@@ -1,11 +1,15 @@
+console.log("SERVER STARTING...");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
+console.log("Loading routes...");
 const authRoute = require("./Routes/AuthRoute.js");
 const predictionRoute = require("./Routes/PredictionRoute.js");
 const datasetRoute = require("./Routes/DatasetRoute.js");
+
+console.log("Routes loaded successfully.");
 
 require("dotenv").config();
 
