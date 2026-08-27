@@ -98,11 +98,14 @@ const Home = () => {
             <span>⌁</span>
             <span>Predictions</span>
           </button>
-
-          <button className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800/70 hover:text-white transition">
-            <span>▤</span>
-            <span>Data</span>
-          </button>
+          
+          <button
+          onClick={() => navigate("/data")}
+          className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800/70 hover:text-white transition"
+          >
+         <span>▤</span>
+         <span>Data</span>
+         </button>
 
           <button className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800/70 hover:text-white transition">
             <span>◈</span>
