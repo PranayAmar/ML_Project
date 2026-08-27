@@ -1,6 +1,6 @@
 const User = require("../Models/UserModel.js");
 const { createSecretToken } = require("../uti/SecretToken.js");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 const cookieOptions = {
   httpOnly: true,
