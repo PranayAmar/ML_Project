@@ -1,3 +1,4 @@
+import Data from "./Pages/Data";
 import { useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Login, Signup, Home } from './Pages';
@@ -8,6 +9,7 @@ function App() {
   return (
     <div className="App">
       <Routes>
+        <Route path="/data" element={<Data />} />
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
