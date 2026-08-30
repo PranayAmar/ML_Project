@@ -1,31 +1,17 @@
 from fastapi import FastAPI, HTTPException
-from pymongo import MongoClient
 import pandas as pd
 import os
 import requests
 
 app = FastAPI(title="DemandForecast AI")
 
+
 # =========================================================
-# CONFIG
+# CONFIGURATION
 # =========================================================
 
-MONGO_URL = os.getenv("MONGO_URL")
-
-
-def get_mongo():
-    if not MONGO_URL:
-        raise RuntimeError("MONGO_URL environment variable is not set.")
-
-    client = MongoClient(
-        MONGO_URL,
-        serverSelectionTimeoutMS=10000,
-    )
-
-    db = client["DemandForecast"]
-    collection = db["datasets"]
-
-    return client, collection
+NODE_API_URL = os.getenv("NODE_API_URL")
+ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
 
 
 # =========================================================
@@ -41,32 +27,48 @@ def health():
 
 
 # =========================================================
-# DATABASE HEALTH
+# FETCH DATA FROM NODE BACKEND
 # =========================================================
 
-@app.get("/db-health")
-def database_health():
-    try:
-        client, collection = get_mongo()
+def fetch_dataset_from_node():
+    if not NODE_API_URL:
+        raise RuntimeError(
+            "NODE_API_URL environment variable is not set."
+        )
 
-        client.admin.command("ping")
+    if not ML_SERVICE_KEY:
+        raise RuntimeError(
+            "ML_SERVICE_KEY environment variable is not set."
+        )
 
-        document_count = collection.count_documents({})
+    response = requests.get(
+        f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
+        headers={
+            "x-ml-service-key": ML_SERVICE_KEY,
+        },
+        timeout=60,
+    )
 
-        client.close()
+    response.raise_for_status()
 
-        return {
-            "status": "ok",
-            "mongodb": "connected",
-            "datasetRecords": document_count,
-        }
+    payload = response.json()
 
-    except Exception as error:
-        return {
-            "status": "error",
-            "mongodb": "connection_failed",
-            "message": str(error),
-        }
+    if not payload.get("success"):
+        raise RuntimeError(
+            payload.get(
+                "message",
+                "Unable to fetch dataset from Node API.",
+            )
+        )
+
+    data = payload.get("data", [])
+
+    if not data:
+        raise RuntimeError(
+            "Node API returned an empty dataset."
+        )
+
+    return pd.DataFrame(data)
 
 
 # =========================================================
@@ -74,29 +76,21 @@ def database_health():
 # =========================================================
 
 def load_dataset(product=None):
-    client, collection = get_mongo()
-
-    query = {}
+    df = fetch_dataset_from_node()
 
     if product:
-        query["product"] = product
+        df = df[
+            df["product"].astype(str).str.strip().str.lower()
+            == product.strip().lower()
+        ].copy()
 
-    documents = list(
-        collection.find(
-            query,
-            {"_id": 0},
-        )
-    )
-
-    client.close()
-
-    if not documents:
+    if df.empty:
         raise HTTPException(
             status_code=404,
             detail="No dataset records found.",
         )
 
-    return pd.DataFrame(documents)
+    return df
 
 
 # =========================================================
@@ -165,12 +159,18 @@ def clean_dataset(df):
         ["product", "storeId", "date"]
     ).reset_index(drop=True)
 
-    df["discountPercent"] = df["discountPercent"].fillna(0)
-    df["stockAvailable"] = df["stockAvailable"].fillna(0)
+    df["discountPercent"] = (
+        df["discountPercent"].fillna(0)
+    )
+
+    df["stockAvailable"] = (
+        df["stockAvailable"].fillna(0)
+    )
 
     if df["temperature"].notna().any():
-        df["temperature"] = df["temperature"].fillna(
-            df["temperature"].median()
+        df["temperature"] = (
+            df["temperature"]
+            .fillna(df["temperature"].median())
         )
     else:
         df["temperature"] = 0
@@ -185,90 +185,131 @@ def clean_dataset(df):
 def create_features(df):
     df = df.copy()
 
-    # Calendar
+    # -----------------------------
+    # CALENDAR FEATURES
+    # -----------------------------
+
     df["year"] = df["date"].dt.year
     df["month"] = df["date"].dt.month
     df["day"] = df["date"].dt.day
     df["dayOfWeek"] = df["date"].dt.dayofweek
-    df["weekOfYear"] = df["date"].dt.isocalendar().week.astype(int)
+
+    df["weekOfYear"] = (
+        df["date"]
+        .dt.isocalendar()
+        .week
+        .astype(int)
+    )
+
     df["quarter"] = df["date"].dt.quarter
 
     df["isWeekend"] = (
         df["dayOfWeek"] >= 5
     ).astype(int)
 
-    # Business features
+    # -----------------------------
+    # BUSINESS FEATURES
+    # -----------------------------
+
     df["isHolidayFlag"] = (
-        df["isHoliday"].astype(bool)
-    ).astype(int)
+        df["isHoliday"]
+        .astype(bool)
+        .astype(int)
+    )
 
     df["isWorkingDayFlag"] = (
-        df["isWorkingDay"].astype(bool)
-    ).astype(int)
+        df["isWorkingDay"]
+        .astype(bool)
+        .astype(int)
+    )
 
     df["promotionFlag"] = (
-        df["promotionActive"].astype(bool)
-    ).astype(int)
+        df["promotionActive"]
+        .astype(bool)
+        .astype(int)
+    )
 
     df["stockoutFlag"] = (
-        df["stockout"].astype(bool)
-    ).astype(int)
+        df["stockout"]
+        .astype(bool)
+        .astype(int)
+    )
 
-    # Trend
+    # -----------------------------
+    # TREND
+    # -----------------------------
+
     min_date = df["date"].min()
 
     df["daysSinceStart"] = (
         df["date"] - min_date
     ).dt.days
 
-    # Historical demand
-    grouped = df.groupby(
-        ["product", "storeId"]
-    )["quantitySold"]
+    # -----------------------------
+    # HISTORICAL DEMAND
+    # -----------------------------
+
+    grouped = (
+        df.groupby(
+            ["product", "storeId"]
+        )["quantitySold"]
+    )
 
     df["lag1"] = grouped.shift(1)
     df["lag7"] = grouped.shift(7)
     df["lag14"] = grouped.shift(14)
     df["lag28"] = grouped.shift(28)
 
-    # Rolling demand
-    df["rollingMean7"] = (
+    # -----------------------------
+    # ROLLING DEMAND
+    # -----------------------------
+
+    grouped_demand = (
         df.groupby(
             ["product", "storeId"]
         )["quantitySold"]
-        .transform(
-            lambda x: x.shift(1).rolling(7).mean()
+    )
+
+    df["rollingMean7"] = (
+        grouped_demand.transform(
+            lambda x:
+                x.shift(1)
+                .rolling(7)
+                .mean()
         )
     )
 
     df["rollingMean14"] = (
-        df.groupby(
-            ["product", "storeId"]
-        )["quantitySold"]
-        .transform(
-            lambda x: x.shift(1).rolling(14).mean()
+        grouped_demand.transform(
+            lambda x:
+                x.shift(1)
+                .rolling(14)
+                .mean()
         )
     )
 
     df["rollingMean30"] = (
-        df.groupby(
-            ["product", "storeId"]
-        )["quantitySold"]
-        .transform(
-            lambda x: x.shift(1).rolling(30).mean()
+        grouped_demand.transform(
+            lambda x:
+                x.shift(1)
+                .rolling(30)
+                .mean()
         )
     )
 
     df["rollingStd7"] = (
-        df.groupby(
-            ["product", "storeId"]
-        )["quantitySold"]
-        .transform(
-            lambda x: x.shift(1).rolling(7).std()
+        grouped_demand.transform(
+            lambda x:
+                x.shift(1)
+                .rolling(7)
+                .std()
         )
     )
 
-    # Price
+    # -----------------------------
+    # PRICE
+    # -----------------------------
+
     df["priceChange"] = (
         df.groupby(
             ["product", "storeId"]
@@ -281,21 +322,32 @@ def create_features(df):
         .fillna(0)
     )
 
-    # Stock
+    # -----------------------------
+    # STOCK
+    # -----------------------------
+
     df["stockCoverageRatio"] = (
         df["stockAvailable"]
         / df["quantitySold"].replace(0, 1)
     )
 
-    # Festival
+    # -----------------------------
+    # FESTIVAL
+    # -----------------------------
+
     df["festivalActive"] = (
         df["festival"]
         .fillna("None")
         .astype(str)
+        .str.strip()
         .str.lower()
         .ne("none")
         .astype(int)
     )
+
+    # -----------------------------
+    # WEATHER
+    # -----------------------------
 
     df["weather"] = (
         df["weather"]
@@ -314,7 +366,6 @@ def create_features(df):
 def data_summary(product=None):
     try:
         df = load_dataset(product)
-
         df = clean_dataset(df)
 
         return {
@@ -333,12 +384,16 @@ def data_summary(product=None):
                 .tolist()
             ),
             "dateRange": {
-                "start": df["date"]
-                .min()
-                .strftime("%Y-%m-%d"),
-                "end": df["date"]
-                .max()
-                .strftime("%Y-%m-%d"),
+                "start": (
+                    df["date"]
+                    .min()
+                    .strftime("%Y-%m-%d")
+                ),
+                "end": (
+                    df["date"]
+                    .max()
+                    .strftime("%Y-%m-%d")
+                ),
             },
         }
 
@@ -369,9 +424,7 @@ def feature_preview(
             )
 
         df = load_dataset(product)
-
         df = clean_dataset(df)
-
         df = create_features(df)
 
         preview = df.tail(limit).copy()
