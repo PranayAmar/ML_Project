@@ -40,20 +40,28 @@ def health():
 # --------------------------------------------------
 # MONGODB CONNECTION CHECK
 # --------------------------------------------------
+def load_dataset(product: str | None = None):
+    _, collection = get_mongo()
 
-@app.get("/db-health")
-def database_health():
-    try:
-        client.admin.command("ping")
+    query = {}
 
-        document_count = dataset_collection.count_documents({})
+    if product:
+        query["product"] = product
 
-        return {
-            "status": "ok",
-            "mongodb": "connected",
-            "datasetRecords": document_count
-        }
+    documents = list(
+        collection.find(
+            query,
+            {"_id": 0}
+        )
+    )
 
+    if not documents:
+        raise HTTPException(
+            status_code=404,
+            detail="No dataset records found."
+        )
+
+    return pd.DataFrame(documents)
     except Exception as error:
         raise HTTPException(
             status_code=500,
