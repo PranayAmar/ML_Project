@@ -4,15 +4,16 @@ const fs = require("fs");
 const path = require("path");
 
 const {
-  verifyMLService,
-} = require("../Middlewares/MLAuthMiddleware.js");
-
-const {
   authenticateUser,
 } = require("../Middlewares/AuthMiddleware.js");
 
 const {
+  verifyMLService,
+} = require("../Middlewares/MLAuthMiddleware.js");
+
+const {
   uploadDataset,
+  getMLDataset,
 } = require("../Controllers/DatasetController.js");
 
 const router = express.Router();
@@ -61,6 +62,12 @@ router.post(
   authenticateUser,
   upload.single("file"),
   uploadDataset
+);
+
+router.get(
+  "/datasets/ml-data",
+  verifyMLService,
+  getMLDataset
 );
 
 module.exports = router;
