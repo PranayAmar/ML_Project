@@ -8,21 +8,22 @@ app = FastAPI(title="DemandForecast AI")
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-
 MONGO_URL = os.getenv("MONGO_URL")
 
-if not MONGO_URL:
-    raise RuntimeError("MONGO_URL environment variable is not set.")
 
-client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
+def get_mongo():
+    if not MONGO_URL:
+        raise RuntimeError("MONGO_URL environment variable is not set.")
 
-# We explicitly use a database name because the Atlas URI
-# may not contain a database name.
-db = client["DemandForecast"]
+    client = MongoClient(
+        MONGO_URL,
+        serverSelectionTimeoutMS=10000,
+    )
 
-# Mongoose model Dataset normally creates the "datasets" collection.
-dataset_collection = db["datasets"]
+    db = client["DemandForecast"]
+    collection = db["datasets"]
 
+    return client, collection
 
 # --------------------------------------------------
 # HEALTH CHECK
