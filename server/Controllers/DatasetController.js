@@ -178,3 +178,23 @@ module.exports.uploadDataset = async (req, res) => {
     }
   }
 };
+module.exports.getMLDataset = async (req, res) => {
+  try {
+    const documents = await Dataset.find({})
+      .select("-_id -createdAt -updatedAt")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: documents.length,
+      data: documents,
+    });
+  } catch (error) {
+    console.error("ML Dataset Fetch Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch dataset for ML service.",
+    });
+  }
+};
