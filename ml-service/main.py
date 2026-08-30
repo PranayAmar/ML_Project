@@ -23,9 +23,9 @@ def health():
     return {
         "status": "ok",
         "service": "demand-forecasting-ml",
+        "nodeApiConfigured": bool(NODE_API_URL),
+        "mlKeyConfigured": bool(ML_SERVICE_KEY),
     }
-
-
 # =========================================================
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
