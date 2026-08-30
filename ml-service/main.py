@@ -2,9 +2,9 @@ from fastapi import FastAPI, HTTPException
 from pymongo import MongoClient
 import pandas as pd
 import os
+import requests
 
 app = FastAPI(title="DemandForecast AI")
-
 
 # =========================================================
 # CONFIG
