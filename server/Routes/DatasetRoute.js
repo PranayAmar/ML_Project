@@ -3,11 +3,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 
-const {
-  uploadDataset,
-  getMLDataset,
-  cleanupDuplicateDatasets,
-} = require("../Controllers/DatasetController.js");
+const router = express.Router();
 
 const {
   authenticateUser,
@@ -20,9 +16,8 @@ const {
 const {
   uploadDataset,
   getMLDataset,
+  cleanupDuplicateDatasets,
 } = require("../Controllers/DatasetController.js");
-
-const router = express.Router();
 
 const uploadDirectory = path.join(__dirname, "../uploads");
 
@@ -69,6 +64,7 @@ router.post(
   upload.single("file"),
   uploadDataset
 );
+
 router.post(
   "/datasets/cleanup-duplicates",
   verifyMLService,
@@ -82,4 +78,3 @@ router.get(
 );
 
 module.exports = router;
-  
