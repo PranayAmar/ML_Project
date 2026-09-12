@@ -198,3 +198,61 @@ module.exports.getMLDataset = async (req, res) => {
     });
   }
 };
+module.exports.cleanupDuplicateDatasets = async (req, res) => {
+  try {
+    const duplicates = await Dataset.aggregate([
+      {
+        $group: {
+          _id: {
+            companyId: "$companyId",
+            date: "$date",
+            product: "$product",
+            storeId: "$storeId",
+          },
+          ids: {
+            $push: "$_id",
+          },
+          count: {
+            $sum: 1,
+          },
+        },
+      },
+      {
+        $match: {
+          count: { $gt: 1 },
+        },
+      },
+    ]);
+
+    let deletedCount = 0;
+
+    for (const group of duplicates) {
+      const idsToDelete = group.ids.slice(1);
+
+      if (idsToDelete.length > 0) {
+        const result = await Dataset.deleteMany({
+          _id: { $in: idsToDelete },
+        });
+
+        deletedCount += result.deletedCount;
+      }
+    }
+
+    const remainingRecords = await Dataset.countDocuments();
+
+    return res.status(200).json({
+      success: true,
+      message: "Duplicate dataset records cleaned successfully.",
+      duplicateGroups: duplicates.length,
+      deletedRecords: deletedCount,
+      remainingRecords,
+    });
+  } catch (error) {
+    console.error("Dataset Cleanup Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to clean duplicate dataset records.",
+    });
+  }
+};
