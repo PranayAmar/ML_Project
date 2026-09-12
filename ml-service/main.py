@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 import pandas as pd
 import os
 import requests
+import time
 
 app = FastAPI(title="DemandForecast AI")
 
@@ -12,7 +13,9 @@ app = FastAPI(title="DemandForecast AI")
 
 NODE_API_URL = os.getenv("NODE_API_URL")
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
-
+DATA_CACHE = None
+DATA_CACHE_TIME = 0
+CACHE_TTL = 15 * 60  # 15 minutes
 
 # =========================================================
 # HEALTH CHECK
@@ -76,7 +79,20 @@ def fetch_dataset_from_node():
 # =========================================================
 
 def load_dataset(product=None):
-    df = fetch_dataset_from_node()
+    global DATA_CACHE
+    global DATA_CACHE_TIME
+
+    current_time = time.time()
+
+    # Use cached data if available and still fresh
+    if (
+        DATA_CACHE is None
+        or current_time - DATA_CACHE_TIME > CACHE_TTL
+    ):
+        DATA_CACHE = fetch_dataset_from_node()
+        DATA_CACHE_TIME = current_time
+
+    df = DATA_CACHE.copy()
 
     if product:
         df = df[
@@ -91,7 +107,6 @@ def load_dataset(product=None):
         )
 
     return df
-
 
 # =========================================================
 # DATA CLEANING
