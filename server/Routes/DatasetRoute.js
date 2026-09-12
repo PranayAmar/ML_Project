@@ -4,6 +4,12 @@ const fs = require("fs");
 const path = require("path");
 
 const {
+  uploadDataset,
+  getMLDataset,
+  cleanupDuplicateDatasets,
+} = require("../Controllers/DatasetController.js");
+
+const {
   authenticateUser,
 } = require("../Middlewares/AuthMiddleware.js");
 
@@ -62,6 +68,11 @@ router.post(
   authenticateUser,
   upload.single("file"),
   uploadDataset
+);
+router.post(
+  "/datasets/cleanup-duplicates",
+  verifyMLService,
+  cleanupDuplicateDatasets
 );
 
 router.get(
