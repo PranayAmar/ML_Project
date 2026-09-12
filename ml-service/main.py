@@ -474,3 +474,29 @@ def feature_preview(
             status_code=500,
             detail=f"Feature generation failed: {str(error)}",
         )
+
+@app.post("/run-cleanup")
+def run_cleanup():
+    if not NODE_API_URL:
+        raise HTTPException(
+            status_code=500,
+            detail="NODE_API_URL is not configured."
+        )
+
+    if not ML_SERVICE_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="ML_SERVICE_KEY is not configured."
+        )
+
+    response = requests.post(
+        f"{NODE_API_URL.rstrip('/')}/datasets/cleanup-duplicates",
+        headers={
+            "x-ml-service-key": ML_SERVICE_KEY,
+        },
+        timeout=120,
+    )
+
+    response.raise_for_status()
+
+    return response.json()
