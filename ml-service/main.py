@@ -33,7 +33,27 @@ def health():
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
 
-def fetch_dataset_from_node():
+import time
+
+DATA_CACHE = {
+    "df": None,
+    "loaded_at": None,
+}
+
+CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
+
+
+def fetch_dataset_from_node(force_refresh=False):
+    now = time.time()
+
+    if (
+        not force_refresh
+        and DATA_CACHE["df"] is not None
+        and DATA_CACHE["loaded_at"] is not None
+        and now - DATA_CACHE["loaded_at"] < CACHE_TTL_SECONDS
+    ):
+        return DATA_CACHE["df"].copy()
+
     if not NODE_API_URL:
         raise RuntimeError(
             "NODE_API_URL environment variable is not set."
@@ -44,36 +64,57 @@ def fetch_dataset_from_node():
             "ML_SERVICE_KEY environment variable is not set."
         )
 
-    response = requests.get(
-        f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
-        headers={
-            "x-ml-service-key": ML_SERVICE_KEY,
-        },
-        timeout=60,
-    )
+    last_error = None
 
-    response.raise_for_status()
-
-    payload = response.json()
-
-    if not payload.get("success"):
-        raise RuntimeError(
-            payload.get(
-                "message",
-                "Unable to fetch dataset from Node API.",
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
+                headers={
+                    "x-ml-service-key": ML_SERVICE_KEY,
+                },
+                timeout=120,
             )
-        )
 
-    data = payload.get("data", [])
+            if response.status_code == 429:
+                wait_seconds = 5 * (attempt + 1)
+                time.sleep(wait_seconds)
+                continue
 
-    if not data:
-        raise RuntimeError(
-            "Node API returned an empty dataset."
-        )
+            response.raise_for_status()
 
-    return pd.DataFrame(data)
+            payload = response.json()
 
+            if not payload.get("success"):
+                raise RuntimeError(
+                    payload.get(
+                        "message",
+                        "Unable to fetch dataset from Node API.",
+                    )
+                )
 
+            data = payload.get("data", [])
+
+            if not data:
+                raise RuntimeError(
+                    "Node API returned an empty dataset."
+                )
+
+            df = pd.DataFrame(data)
+
+            DATA_CACHE["df"] = df
+            DATA_CACHE["loaded_at"] = time.time()
+
+            return df.copy()
+
+        except Exception as error:
+            last_error = error
+            time.sleep(2)
+
+    raise RuntimeError(
+        f"Unable to fetch dataset from Node API: {last_error}"
+    )'
+    
 # =========================================================
 # LOAD DATA
 # =========================================================
