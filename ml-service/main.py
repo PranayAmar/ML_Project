@@ -40,7 +40,7 @@ DATA_CACHE = {
     "loaded_at": None,
 }
 
-CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
+CACHE_TTL_SECONDS = 30 * 60
 
 
 def fetch_dataset_from_node(force_refresh=False):
@@ -109,12 +109,13 @@ def fetch_dataset_from_node(force_refresh=False):
 
         except Exception as error:
             last_error = error
-            time.sleep(2)
+
+            if attempt < 2:
+                time.sleep(2)
 
     raise RuntimeError(
         f"Unable to fetch dataset from Node API: {last_error}"
-    )'
-    
+    )
 # =========================================================
 # LOAD DATA
 # =========================================================
