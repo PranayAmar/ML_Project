@@ -32,8 +32,6 @@ def health():
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
 def fetch_dataset_from_node(force_refresh=False):
-    import time
-
     now = time.time()
 
     if (
