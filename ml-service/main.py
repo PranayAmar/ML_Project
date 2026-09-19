@@ -131,6 +131,30 @@ def fetch_dataset_from_node(force_refresh=False):
     CACHE_LOADED_AT = time.time()
 
     return df.copy()
+  
+# =========================================================
+# LOAD DATA
+# =========================================================
+
+def load_dataset(product=None):
+    df = fetch_dataset_from_node()
+
+    if product:
+        df = df[
+            df["product"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            == product.strip().lower()
+        ].copy()
+
+    if df.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="No dataset records found.",
+        )
+
+    return df
 # =========================================================
 # DATA CLEANING
 # =========================================================
