@@ -12,10 +12,10 @@ app = FastAPI(title="DemandForecast AI")
 
 NODE_API_URL = os.getenv("NODE_API_URL")
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
-DATA_CACHE = None
-DATA_CACHE_TIME = 0
-CACHE_TTL = 15 * 60  # 15 minutes
 
+CACHED_DF = None
+CACHE_LOADED_AT = 0
+CACHE_TTL_SECONDS = 30 * 60
 # =========================================================
 # HEALTH CHECK
 # =========================================================
@@ -32,15 +32,17 @@ def health():
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
 def fetch_dataset_from_node(force_refresh=False):
+    global CACHED_DF, CACHE_LOADED_AT
+
     now = time.time()
 
+    # Use cached dataframe when available
     if (
         not force_refresh
-        and DATA_CACHE["df"] is not None
-        and DATA_CACHE["loaded_at"] is not None
-        and now - DATA_CACHE["loaded_at"] < CACHE_TTL_SECONDS
+        and CACHED_DF is not None
+        and now - CACHE_LOADED_AT < CACHE_TTL_SECONDS
     ):
-        return DATA_CACHE["df"].copy()
+        return CACHED_DF.copy()
 
     if not NODE_API_URL:
         raise RuntimeError(
@@ -57,69 +59,60 @@ def fetch_dataset_from_node(force_refresh=False):
     page_size = 5000
 
     while True:
-        last_error = None
+        response = requests.get(
+            f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
+            params={
+                "page": page,
+                "limit": page_size,
+            },
+            headers={
+                "x-ml-service-key": ML_SERVICE_KEY,
+            },
+            timeout=120,
+        )
 
-        for attempt in range(3):
-            try:
-                response = requests.get(
-                    f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
-                    params={
-                        "page": page,
-                        "limit": page_size,
-                    },
-                    headers={
-                        "x-ml-service-key": ML_SERVICE_KEY,
-                    },
-                    timeout=120,
-                )
-
-                if response.status_code == 429:
-                    wait_seconds = 5 * (attempt + 1)
-                    time.sleep(wait_seconds)
-                    last_error = (
-                        f"Node API rate limited request on page {page}."
-                    )
-                    continue
-
-                response.raise_for_status()
-
-                payload = response.json()
-
-                if not payload.get("success"):
-                    raise RuntimeError(
-                        payload.get(
-                            "message",
-                            "Unable to fetch dataset from Node API.",
-                        )
-                    )
-
-                all_rows.extend(
-                    payload.get("data", [])
-                )
-
-                has_more = payload.get(
-                    "hasMore",
-                    False
-                )
-
-                break
-
-            except Exception as error:
-                last_error = error
-
-                if attempt < 2:
-                    time.sleep(2)
-
-        else:
+        if response.status_code == 429:
             raise RuntimeError(
-                f"Unable to fetch dataset page {page}: "
-                f"{last_error}"
+                f"Node API rate-limited page {page}. Please retry shortly."
             )
 
-        if not has_more:
+        response.raise_for_status()
+
+        payload = response.json()
+
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                "Node API returned an invalid response."
+            )
+
+        if not payload.get("success"):
+            raise RuntimeError(
+                payload.get(
+                    "message",
+                    "Node API returned an unsuccessful response.",
+                )
+            )
+
+        page_data = payload.get("data")
+
+        if page_data is None:
+            raise RuntimeError(
+                f"Node API returned no data for page {page}."
+            )
+
+        if not isinstance(page_data, list):
+            raise RuntimeError(
+                f"Node API data on page {page} is not a list."
+            )
+
+        all_rows.extend(page_data)
+
+        if not payload.get("hasMore", False):
             break
 
         page += 1
+
+        # Avoid hammering the free Node service
         time.sleep(1)
 
     if not all_rows:
@@ -129,44 +122,15 @@ def fetch_dataset_from_node(force_refresh=False):
 
     df = pd.DataFrame(all_rows)
 
-    DATA_CACHE["df"] = df
-    DATA_CACHE["loaded_at"] = time.time()
-
-    return df.copy()
-# =========================================================
-# LOAD DATA
-# =========================================================
-
-def load_dataset(product=None):
-    global DATA_CACHE
-    global DATA_CACHE_TIME
-
-    current_time = time.time()
-
-    # Use cached data if available and still fresh
-    if (
-        DATA_CACHE is None
-        or current_time - DATA_CACHE_TIME > CACHE_TTL
-    ):
-        DATA_CACHE = fetch_dataset_from_node()
-        DATA_CACHE_TIME = current_time
-
-    df = DATA_CACHE.copy()
-
-    if product:
-        df = df[
-            df["product"].astype(str).str.strip().str.lower()
-            == product.strip().lower()
-        ].copy()
-
     if df.empty:
-        raise HTTPException(
-            status_code=404,
-            detail="No dataset records found.",
+        raise RuntimeError(
+            "Dataset could not be converted into a dataframe."
         )
 
-    return df
+    CACHED_DF = df.copy()
+    CACHE_LOADED_AT = time.time()
 
+    return df.copy()
 # =========================================================
 # DATA CLEANING
 # =========================================================
