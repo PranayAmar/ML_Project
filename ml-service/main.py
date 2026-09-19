@@ -32,7 +32,6 @@ def health():
 # =========================================================
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
-
 import time
 
 DATA_CACHE = {
@@ -40,7 +39,7 @@ DATA_CACHE = {
     "loaded_at": None,
 }
 
-CACHE_TTL_SECONDS = 30 * 60
+CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
 
 
 def fetch_dataset_from_node(force_refresh=False):
@@ -109,9 +108,7 @@ def fetch_dataset_from_node(force_refresh=False):
 
         except Exception as error:
             last_error = error
-
-            if attempt < 2:
-                time.sleep(2)
+            time.sleep(2)
 
     raise RuntimeError(
         f"Unable to fetch dataset from Node API: {last_error}"
