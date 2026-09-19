@@ -180,12 +180,37 @@ module.exports.uploadDataset = async (req, res) => {
 };
 module.exports.getMLDataset = async (req, res) => {
   try {
-    const documents = await Dataset.find({})
-      .select("-_id -createdAt -updatedAt")
-      .lean();
+    const page = Math.max(
+      Number.parseInt(req.query.page || "1", 10),
+      1
+    );
+
+    const limit = Math.min(
+      Math.max(
+        Number.parseInt(req.query.limit || "5000", 10),
+        1
+      ),
+      5000
+    );
+
+    const skip = (page - 1) * limit;
+
+    const [documents, total] = await Promise.all([
+      Dataset.find({})
+        .select("-_id -createdAt -updatedAt")
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      Dataset.countDocuments({}),
+    ]);
 
     return res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
+      hasMore: skip + documents.length < total,
       count: documents.length,
       data: documents,
     });
