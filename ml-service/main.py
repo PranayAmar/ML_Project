@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 import pandas as pd
 import os
 import requests
-import time
 
 app = FastAPI(title="DemandForecast AI")
 
