@@ -32,17 +32,9 @@ def health():
 # =========================================================
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
-import time
-
-DATA_CACHE = {
-    "df": None,
-    "loaded_at": None,
-}
-
-CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
-
-
 def fetch_dataset_from_node(force_refresh=False):
+    import time
+
     now = time.time()
 
     if (
@@ -63,56 +55,87 @@ def fetch_dataset_from_node(force_refresh=False):
             "ML_SERVICE_KEY environment variable is not set."
         )
 
-    last_error = None
+    all_rows = []
+    page = 1
+    page_size = 5000
 
-    for attempt in range(3):
-        try:
-            response = requests.get(
-                f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
-                headers={
-                    "x-ml-service-key": ML_SERVICE_KEY,
-                },
-                timeout=120,
+    while True:
+        last_error = None
+
+        for attempt in range(3):
+            try:
+                response = requests.get(
+                    f"{NODE_API_URL.rstrip('/')}/datasets/ml-data",
+                    params={
+                        "page": page,
+                        "limit": page_size,
+                    },
+                    headers={
+                        "x-ml-service-key": ML_SERVICE_KEY,
+                    },
+                    timeout=120,
+                )
+
+                if response.status_code == 429:
+                    wait_seconds = 5 * (attempt + 1)
+                    time.sleep(wait_seconds)
+                    last_error = (
+                        f"Node API rate limited request on page {page}."
+                    )
+                    continue
+
+                response.raise_for_status()
+
+                payload = response.json()
+
+                if not payload.get("success"):
+                    raise RuntimeError(
+                        payload.get(
+                            "message",
+                            "Unable to fetch dataset from Node API.",
+                        )
+                    )
+
+                all_rows.extend(
+                    payload.get("data", [])
+                )
+
+                has_more = payload.get(
+                    "hasMore",
+                    False
+                )
+
+                break
+
+            except Exception as error:
+                last_error = error
+
+                if attempt < 2:
+                    time.sleep(2)
+
+        else:
+            raise RuntimeError(
+                f"Unable to fetch dataset page {page}: "
+                f"{last_error}"
             )
 
-            if response.status_code == 429:
-                wait_seconds = 5 * (attempt + 1)
-                time.sleep(wait_seconds)
-                continue
+        if not has_more:
+            break
 
-            response.raise_for_status()
+        page += 1
+        time.sleep(1)
 
-            payload = response.json()
+    if not all_rows:
+        raise RuntimeError(
+            "Node API returned an empty dataset."
+        )
 
-            if not payload.get("success"):
-                raise RuntimeError(
-                    payload.get(
-                        "message",
-                        "Unable to fetch dataset from Node API.",
-                    )
-                )
+    df = pd.DataFrame(all_rows)
 
-            data = payload.get("data", [])
+    DATA_CACHE["df"] = df
+    DATA_CACHE["loaded_at"] = time.time()
 
-            if not data:
-                raise RuntimeError(
-                    "Node API returned an empty dataset."
-                )
-
-            df = pd.DataFrame(data)
-
-            DATA_CACHE["df"] = df
-            DATA_CACHE["loaded_at"] = time.time()
-
-            return df.copy()
-
-        except Exception as error:
-            last_error = error
-            time.sleep(2)
-
-    raise RuntimeError(
-        f"Unable to fetch dataset from Node API: {last_error}"
-    )
+    return df.copy()
 # =========================================================
 # LOAD DATA
 # =========================================================
