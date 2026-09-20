@@ -285,7 +285,38 @@ function Data() {
             </div>
           </div>
 
-          {/* GRID */}
+          {/* DATASET QUALITY - ALWAYS VISIBLE */}
+<section className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-5 sm:p-6">
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+    <div className="flex items-start gap-4">
+      <div className="w-11 h-11 shrink-0 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 text-xl">
+        ⚠
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold text-white">
+          Dataset Quality Check
+        </h3>
+
+        <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+          Remove duplicate records before model training to keep historical
+          demand data clean and prevent repeated observations.
+        </p>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      onClick={handleCleanup}
+      disabled={cleaning}
+      className="w-full sm:w-auto shrink-0 px-6 py-3 rounded-xl border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+    >
+      {cleaning ? "Cleaning..." : "Clean Duplicate Records"}
+    </button>
+  </div>
+</section>
+
+{/* GRID */}
           <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.9fr] gap-6">
             {/* UPLOAD CARD */}
             <section className="rounded-2xl border border-white/10 bg-[#07101f] p-6 sm:p-8">
