@@ -108,5 +108,16 @@ const datasetSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
+datasetSchema.index(
+  {
+    companyId: 1,
+    date: 1,
+    product: 1,
+    storeId: 1,
+  },
+  {
+    unique: true,
+    name: "unique_daily_product_store",
+  }
+);
 module.exports = mongoose.model("Dataset", datasetSchema);
