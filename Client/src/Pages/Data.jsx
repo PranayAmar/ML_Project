@@ -7,6 +7,8 @@ const Data = () => {
 
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -35,6 +37,10 @@ const Data = () => {
 
     setFile(selectedFile);
   };
+
+  // =========================================================
+  // UPLOAD DATASET
+  // =========================================================
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -65,7 +71,10 @@ const Data = () => {
         setMessage(
           `${data.message} ${data.rowsInserted} rows inserted successfully.`
         );
+
         setFile(null);
+
+        // Reset file input
         e.target.reset();
       } else {
         setError(data.message || "Upload failed.");
@@ -75,30 +84,96 @@ const Data = () => {
 
       if (err.response) {
         setError(
-          err.response.data?.message || "Unable to upload dataset."
+          err.response.data?.message ||
+            "Unable to upload dataset."
         );
       } else if (err.request) {
         setError("Unable to connect to the server.");
       } else {
-        setError("Something went wrong while uploading the dataset.");
+        setError(
+          "Something went wrong while uploading the dataset."
+        );
       }
     } finally {
       setUploading(false);
     }
   };
 
+  // =========================================================
+  // CLEAN DUPLICATE DATA
+  // =========================================================
+
+  const handleCleanup = async () => {
+    const confirmCleanup = window.confirm(
+      "This will remove duplicate records from your dataset. Continue?"
+    );
+
+    if (!confirmCleanup) {
+      return;
+    }
+
+    try {
+      setCleaning(true);
+      setMessage("");
+      setError("");
+
+      const { data } = await axios.post(
+        "https://ml-project-d6va.onrender.com/datasets/cleanup-duplicates",
+        {},
+        {
+          withCredentials: true,
+        }
+      );
+
+      if (data.success) {
+        setMessage(
+          `${data.message} Deleted: ${data.deletedRecords} records. Remaining: ${data.remainingRecords} records.`
+        );
+      } else {
+        setError(
+          data.message || "Unable to clean duplicate records."
+        );
+      }
+    } catch (err) {
+      console.error("Dataset Cleanup Error:", err);
+
+      if (err.response) {
+        setError(
+          err.response.data?.message ||
+            "Unable to clean duplicate records."
+        );
+      } else if (err.request) {
+        setError("Unable to connect to the server.");
+      } else {
+        setError(
+          "Something went wrong while cleaning the dataset."
+        );
+      }
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#020617] text-white flex">
-      {/* SIDEBAR */}
+      {/* =====================================================
+          SIDEBAR
+      ====================================================== */}
+
       <aside className="hidden lg:flex w-64 min-h-screen bg-[#07101f] border-r border-slate-800 flex-col">
         <div className="h-20 px-6 flex items-center border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-              <span className="text-emerald-400 text-xl">↗</span>
+              <span className="text-emerald-400 text-xl">
+                ↗
+              </span>
             </div>
 
             <div>
-              <h1 className="font-bold text-lg">DemandForecast</h1>
+              <h1 className="font-bold text-lg">
+                DemandForecast
+              </h1>
+
               <span className="text-emerald-400 text-sm font-semibold">
                 AI
               </span>
@@ -162,7 +237,10 @@ const Data = () => {
         </nav>
       </aside>
 
-      {/* MAIN */}
+      {/* =====================================================
+          MAIN
+      ====================================================== */}
+
       <main className="flex-1 overflow-auto">
         <header className="h-20 border-b border-slate-800 bg-[#020617]/80 backdrop-blur flex items-center justify-between px-6 lg:px-10">
           <div>
@@ -170,7 +248,9 @@ const Data = () => {
               Machine Learning Workspace
             </p>
 
-            <h1 className="text-lg font-semibold">Dataset Management</h1>
+            <h1 className="text-lg font-semibold">
+              Dataset Management
+            </h1>
           </div>
 
           <button
@@ -182,7 +262,10 @@ const Data = () => {
         </header>
 
         <section className="p-6 lg:p-10 max-w-[1400px] mx-auto">
-          {/* TITLE */}
+          {/* =================================================
+              TITLE
+          ================================================== */}
+
           <div className="mb-8">
             <p className="text-emerald-400 font-medium text-sm mb-2">
               DATA MANAGEMENT
@@ -193,14 +276,21 @@ const Data = () => {
             </h2>
 
             <p className="text-slate-400 mt-3 max-w-3xl leading-7">
-              Upload your historical sales dataset. The forecasting system
-              will validate and process the data before it is used for
-              machine learning.
+              Upload your historical sales dataset. The
+              forecasting system will validate and process
+              the data before it is used for machine learning.
             </p>
           </div>
 
+          {/* =================================================
+              MAIN CARDS
+          ================================================== */}
+
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-            {/* UPLOAD CARD */}
+            {/* =================================================
+                UPLOAD CARD
+            ================================================== */}
+
             <div className="xl:col-span-3 bg-[#07101f] border border-slate-800 rounded-3xl p-7">
               <div className="flex items-center gap-4 mb-7">
                 <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl">
@@ -245,10 +335,14 @@ const Data = () => {
                 </label>
 
                 {/* SELECTED FILE */}
+
                 {file && (
                   <div className="mt-5 p-4 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
                     <div>
-                      <p className="font-medium">{file.name}</p>
+                      <p className="font-medium">
+                        {file.name}
+                      </p>
+
                       <p className="text-xs text-slate-500 mt-1">
                         {(file.size / 1024 / 1024).toFixed(2)} MB
                       </p>
@@ -261,6 +355,7 @@ const Data = () => {
                 )}
 
                 {/* ERROR */}
+
                 {error && (
                   <div className="mt-5 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                     {error}
@@ -268,31 +363,72 @@ const Data = () => {
                 )}
 
                 {/* SUCCESS */}
+
                 {message && (
                   <div className="mt-5 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
                     {message}
                   </div>
                 )}
 
+                {/* UPLOAD BUTTON */}
+
                 <button
                   type="submit"
                   disabled={uploading || !file}
                   className="w-full mt-6 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-slate-950 font-semibold py-3.5 rounded-xl transition"
                 >
-                  {uploading ? "Uploading..." : "Upload Dataset →"}
+                  {uploading
+                    ? "Uploading..."
+                    : "Upload Dataset →"}
                 </button>
               </form>
+
+              {/* DUPLICATE CLEANUP */}
+
+              <div className="mt-6 pt-6 border-t border-slate-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h4 className="font-semibold text-slate-200">
+                      Dataset Quality
+                    </h4>
+
+                    <p className="text-sm text-slate-500 mt-1 leading-6">
+                      Remove duplicate records before model
+                      training to keep forecasting evaluation
+                      reliable.
+                    </p>
+                  </div>
+
+                  <span className="text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 px-3 py-1.5 rounded-lg">
+                    DATA CLEANUP
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCleanup}
+                  disabled={cleaning}
+                  className="w-full mt-5 border border-orange-500/30 text-orange-400 hover:bg-orange-500/10 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-xl transition"
+                >
+                  {cleaning
+                    ? "Cleaning Dataset..."
+                    : "Clean Duplicate Records"}
+                </button>
+              </div>
             </div>
 
-            {/* REQUIREMENTS */}
+            {/* =================================================
+                REQUIRED COLUMNS
+            ================================================== */}
+
             <div className="xl:col-span-2 bg-[#07101f] border border-slate-800 rounded-3xl p-7">
               <h3 className="text-xl font-semibold">
                 Required CSV Columns
               </h3>
 
               <p className="text-sm text-slate-500 mt-2 leading-6">
-                Your CSV should contain these columns for the forecasting
-                pipeline.
+                Your CSV should contain these columns for the
+                forecasting pipeline.
               </p>
 
               <div className="mt-6 space-y-2">
@@ -318,7 +454,10 @@ const Data = () => {
                     key={column}
                     className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-800"
                   >
-                    <span className="text-emerald-400">✓</span>
+                    <span className="text-emerald-400">
+                      ✓
+                    </span>
+
                     <code className="text-sm text-slate-300">
                       {column}
                     </code>
@@ -328,42 +467,77 @@ const Data = () => {
             </div>
           </div>
 
-          {/* PIPELINE INFO */}
+          {/* =================================================
+              PIPELINE INFO
+          ================================================== */}
+
           <div className="mt-6 bg-[#07101f] border border-slate-800 rounded-3xl p-7">
             <h3 className="text-xl font-semibold">
               What happens after upload?
             </h3>
 
+            <p className="text-slate-500 text-sm mt-2">
+              Your data moves through a validation and
+              preparation pipeline before model training.
+            </p>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <span className="text-emerald-400 text-xl">01</span>
-                <h4 className="font-semibold mt-3">Validation</h4>
+                <span className="text-emerald-400 text-xl">
+                  01
+                </span>
+
+                <h4 className="font-semibold mt-3">
+                  Validation
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
                   Required columns and values are checked.
                 </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <span className="text-emerald-400 text-xl">02</span>
-                <h4 className="font-semibold mt-3">Processing</h4>
+                <span className="text-emerald-400 text-xl">
+                  02
+                </span>
+
+                <h4 className="font-semibold mt-3">
+                  Processing
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
-                  Valid records are converted into structured data.
+                  Valid records are converted into structured
+                  data.
                 </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <span className="text-emerald-400 text-xl">03</span>
-                <h4 className="font-semibold mt-3">Storage</h4>
+                <span className="text-emerald-400 text-xl">
+                  03
+                </span>
+
+                <h4 className="font-semibold mt-3">
+                  Storage
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
-                  Dataset records are stored securely in MongoDB.
+                  Dataset records are stored securely in
+                  MongoDB.
                 </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <span className="text-emerald-400 text-xl">04</span>
-                <h4 className="font-semibold mt-3">ML Ready</h4>
+                <span className="text-emerald-400 text-xl">
+                  04
+                </span>
+
+                <h4 className="font-semibold mt-3">
+                  ML Ready
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
-                  Data becomes available for model training.
+                  Clean data becomes available for model
+                  training.
                 </p>
               </div>
             </div>
