@@ -67,10 +67,9 @@ router.post(
 
 router.post(
   "/datasets/cleanup-duplicates",
-  verifyMLService,
+  authenticateUser,
   cleanupDuplicateDatasets
 );
-
 router.get(
   "/datasets/ml-data",
   verifyMLService,
