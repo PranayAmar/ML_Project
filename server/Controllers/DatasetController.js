@@ -225,7 +225,20 @@ module.exports.getMLDataset = async (req, res) => {
 };
 module.exports.cleanupDuplicateDatasets = async (req, res) => {
   try {
+    const companyId = req.user.userId;
+
     const duplicates = await Dataset.aggregate([
+      {
+        $match: {
+          companyId,
+        },
+      },
+      {
+        $sort: {
+          createdAt: 1,
+          _id: 1,
+        },
+      },
       {
         $group: {
           _id: {
@@ -244,7 +257,9 @@ module.exports.cleanupDuplicateDatasets = async (req, res) => {
       },
       {
         $match: {
-          count: { $gt: 1 },
+          count: {
+            $gt: 1,
+          },
         },
       },
     ]);
@@ -256,14 +271,18 @@ module.exports.cleanupDuplicateDatasets = async (req, res) => {
 
       if (idsToDelete.length > 0) {
         const result = await Dataset.deleteMany({
-          _id: { $in: idsToDelete },
+          _id: {
+            $in: idsToDelete,
+          },
         });
 
         deletedCount += result.deletedCount;
       }
     }
 
-    const remainingRecords = await Dataset.countDocuments();
+    const remainingRecords = await Dataset.countDocuments({
+      companyId,
+    });
 
     return res.status(200).json({
       success: true,
