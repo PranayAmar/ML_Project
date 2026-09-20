@@ -21,6 +21,12 @@ const REQUIRED_COLUMNS = [
   "temperature",
 ];
 
+/*
+==========================================================
+UPLOAD DATASET
+==========================================================
+*/
+
 module.exports.uploadDataset = async (req, res) => {
   let filePath = null;
 
@@ -72,14 +78,24 @@ module.exports.uploadDataset = async (req, res) => {
       const rowNumber = index + 2;
 
       const parsedDate = new Date(row.date);
+
       const quantitySold = Number(row.quantitySold);
       const unitPrice = Number(row.unitPrice);
       const discountPercent = Number(row.discountPercent || 0);
       const stockAvailable = Number(row.stockAvailable);
+
       const temperature =
         row.temperature === "" || row.temperature == null
           ? null
           : Number(row.temperature);
+
+      /*
+      Normalize every date to the beginning of the UTC day.
+      This helps duplicate detection remain consistent.
+      */
+      if (!Number.isNaN(parsedDate.getTime())) {
+        parsedDate.setUTCHours(0, 0, 0, 0);
+      }
 
       if (Number.isNaN(parsedDate.getTime())) {
         throw new Error(`Invalid date at CSV row ${rowNumber}.`);
@@ -124,6 +140,7 @@ module.exports.uploadDataset = async (req, res) => {
         uploadedBy: req.user.userId,
 
         date: parsedDate,
+
         product: row.product.trim(),
         category: row.category.trim(),
         storeId: row.storeId.trim(),
@@ -136,19 +153,26 @@ module.exports.uploadDataset = async (req, res) => {
           String(row.promotionActive).toLowerCase() === "true",
 
         stockAvailable,
-        stockout: String(row.stockout).toLowerCase() === "true",
 
-        isHoliday: String(row.isHoliday).toLowerCase() === "true",
+        stockout:
+          String(row.stockout).toLowerCase() === "true",
 
-        holidayName: row.holidayName?.trim() || "",
-        festival: row.festival?.trim() || "None",
+        isHoliday:
+          String(row.isHoliday).toLowerCase() === "true",
+
+        holidayName:
+          row.holidayName?.trim() || "",
+
+        festival:
+          row.festival?.trim() || "None",
 
         isWorkingDay:
           row.isWorkingDay === ""
             ? true
             : String(row.isWorkingDay).toLowerCase() === "true",
 
-        weather: row.weather?.trim() || "Unknown",
+        weather:
+          row.weather?.trim() || "Unknown",
 
         temperature,
       });
@@ -159,25 +183,39 @@ module.exports.uploadDataset = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Dataset uploaded successfully.",
+
+      // Keep both names so frontend stays compatible.
       rowsInserted: insertedData.length,
+      insertedCount: insertedData.length,
     });
   } catch (error) {
     console.error("Dataset Upload Error:", error);
 
     return res.status(400).json({
       success: false,
-      message: error.message || "Unable to process dataset.",
+      message:
+        error.message || "Unable to process dataset.",
     });
   } finally {
     if (filePath) {
       fs.unlink(filePath, (unlinkError) => {
         if (unlinkError) {
-          console.error("Temporary file cleanup error:", unlinkError);
+          console.error(
+            "Temporary file cleanup error:",
+            unlinkError
+          );
         }
       });
     }
   }
 };
+
+/*
+==========================================================
+GET DATASET FOR ML SERVICE
+==========================================================
+*/
+
 module.exports.getMLDataset = async (req, res) => {
   try {
     const page = Math.max(
@@ -223,38 +261,61 @@ module.exports.getMLDataset = async (req, res) => {
     });
   }
 };
+
+/*
+==========================================================
+CLEAN DUPLICATE DATASET RECORDS
+==========================================================
+*/
+
 module.exports.cleanupDuplicateDatasets = async (req, res) => {
   try {
     const companyId = req.user.userId;
 
-    const duplicates = await Dataset.aggregate([
+    /*
+      Duplicate definition:
+
+      Same:
+      - company
+      - date
+      - product
+      - store
+
+      We keep the oldest record and delete the rest.
+    */
+
+    const duplicateGroups = await Dataset.aggregate([
       {
         $match: {
           companyId,
         },
       },
+
       {
         $sort: {
           createdAt: 1,
           _id: 1,
         },
       },
+
       {
         $group: {
           _id: {
-            companyId: "$companyId",
             date: "$date",
             product: "$product",
             storeId: "$storeId",
           },
+
           ids: {
             $push: "$_id",
           },
+
           count: {
             $sum: 1,
           },
         },
       },
+
       {
         $match: {
           count: {
@@ -264,39 +325,60 @@ module.exports.cleanupDuplicateDatasets = async (req, res) => {
       },
     ]);
 
-    let deletedCount = 0;
+    /*
+      Collect all duplicate IDs.
+      For every group:
+      first ID = keep
+      remaining IDs = delete
+    */
 
-    for (const group of duplicates) {
-      const idsToDelete = group.ids.slice(1);
+    const idsToDelete = [];
 
-      if (idsToDelete.length > 0) {
-        const result = await Dataset.deleteMany({
-          _id: {
-            $in: idsToDelete,
-          },
-        });
-
-        deletedCount += result.deletedCount;
-      }
+    for (const group of duplicateGroups) {
+      idsToDelete.push(...group.ids.slice(1));
     }
 
-    const remainingRecords = await Dataset.countDocuments({
-      companyId,
-    });
+    let deletedCount = 0;
+
+    if (idsToDelete.length > 0) {
+      const deleteResult = await Dataset.deleteMany({
+        companyId,
+        _id: {
+          $in: idsToDelete,
+        },
+      });
+
+      deletedCount = deleteResult.deletedCount || 0;
+    }
+
+    const remainingRecords =
+      await Dataset.countDocuments({ companyId });
 
     return res.status(200).json({
       success: true,
-      message: "Duplicate dataset records cleaned successfully.",
-      duplicateGroups: duplicates.length,
+      message:
+        deletedCount > 0
+          ? "Duplicate dataset records cleaned successfully."
+          : "No duplicate dataset records found.",
+
+      duplicateGroups: duplicateGroups.length,
+
+      duplicateRecordsDetected: idsToDelete.length,
+
       deletedRecords: deletedCount,
+
       remainingRecords,
     });
   } catch (error) {
-    console.error("Dataset Cleanup Error:", error);
+    console.error(
+      "Dataset Cleanup Error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Unable to clean duplicate dataset records.",
+      message:
+        "Unable to clean duplicate dataset records.",
     });
   }
 };
