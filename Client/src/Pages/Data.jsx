@@ -294,10 +294,9 @@ function Data() {
       </div>
 
       <div>
-        <h3 className="text-lg font-semibold text-white">
-          Dataset Quality Check
-        </h3>
-
+          <h3 className="text-lg font-semibold text-white">
+          DATASET QUALITY CHECK TEST
+          </h3>
         <p className="text-sm text-slate-400 mt-1 max-w-2xl">
           Remove duplicate records before model training to keep historical
           demand data clean and prevent repeated observations.
