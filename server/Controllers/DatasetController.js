@@ -29,6 +29,7 @@ UPLOAD DATASET
 
 module.exports.uploadDataset = async (req, res) => {
   let filePath = null;
+  let session = null;
 
   try {
     if (!req.file) {
@@ -73,6 +74,8 @@ module.exports.uploadDataset = async (req, res) => {
     }
 
     const documents = [];
+    const seenKeys = new Set();
+    let duplicateRowsSkipped = 0;
 
     for (const [index, row] of rows.entries()) {
       const rowNumber = index + 2;
@@ -89,17 +92,11 @@ module.exports.uploadDataset = async (req, res) => {
           ? null
           : Number(row.temperature);
 
-      /*
-      Normalize every date to the beginning of the UTC day.
-      This helps duplicate detection remain consistent.
-      */
-      if (!Number.isNaN(parsedDate.getTime())) {
-        parsedDate.setUTCHours(0, 0, 0, 0);
-      }
-
       if (Number.isNaN(parsedDate.getTime())) {
         throw new Error(`Invalid date at CSV row ${rowNumber}.`);
       }
+
+      parsedDate.setUTCHours(0, 0, 0, 0);
 
       if (Number.isNaN(quantitySold) || quantitySold < 0) {
         throw new Error(`Invalid quantitySold at CSV row ${rowNumber}.`);
@@ -135,15 +132,36 @@ module.exports.uploadDataset = async (req, res) => {
         );
       }
 
+      const product = row.product.trim();
+      const category = row.category.trim();
+      const storeId = row.storeId.trim();
+
+      /*
+        One valid observation per:
+        date + product + store
+      */
+
+      const duplicateKey = [
+        parsedDate.getTime(),
+        product.toLowerCase(),
+        storeId.toLowerCase(),
+      ].join("|");
+
+      if (seenKeys.has(duplicateKey)) {
+        duplicateRowsSkipped++;
+        continue;
+      }
+
+      seenKeys.add(duplicateKey);
+
       documents.push({
         companyId: req.user.userId,
         uploadedBy: req.user.userId,
 
         date: parsedDate,
-
-        product: row.product.trim(),
-        category: row.category.trim(),
-        storeId: row.storeId.trim(),
+        product,
+        category,
+        storeId,
 
         quantitySold,
         unitPrice,
@@ -178,17 +196,65 @@ module.exports.uploadDataset = async (req, res) => {
       });
     }
 
-    const insertedData = await Dataset.insertMany(documents);
+    if (documents.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid unique records were found in the CSV.",
+      });
+    }
+
+    /*
+      Replace old dataset only after validation succeeds.
+
+      Transaction:
+      old data is deleted + new data inserted atomically.
+    */
+
+    session = await Dataset.startSession();
+    session.startTransaction();
+
+    await Dataset.deleteMany(
+      {
+        companyId: req.user.userId,
+      },
+      {
+        session,
+      }
+    );
+
+    const insertedData = await Dataset.insertMany(
+      documents,
+      {
+        session,
+        ordered: true,
+      }
+    );
+
+    await session.commitTransaction();
 
     return res.status(201).json({
       success: true,
-      message: "Dataset uploaded successfully.",
+      message:
+        "Dataset uploaded successfully. Previous dataset replaced.",
 
-      // Keep both names so frontend stays compatible.
+      rowsReceived: rows.length,
+      duplicateRowsSkipped,
+
       rowsInserted: insertedData.length,
       insertedCount: insertedData.length,
     });
   } catch (error) {
+    if (session) {
+      try {
+        await session.abortTransaction();
+      } catch (abortError) {
+        console.error(
+          "Dataset Transaction Abort Error:",
+          abortError
+        );
+      }
+    }
+
     console.error("Dataset Upload Error:", error);
 
     return res.status(400).json({
@@ -197,6 +263,10 @@ module.exports.uploadDataset = async (req, res) => {
         error.message || "Unable to process dataset.",
     });
   } finally {
+    if (session) {
+      await session.endSession();
+    }
+
     if (filePath) {
       fs.unlink(filePath, (unlinkError) => {
         if (unlinkError) {
@@ -209,7 +279,6 @@ module.exports.uploadDataset = async (req, res) => {
     }
   }
 };
-
 /*
 ==========================================================
 GET DATASET FOR ML SERVICE
