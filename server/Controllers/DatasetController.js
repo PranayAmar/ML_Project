@@ -215,32 +215,40 @@ module.exports.uploadDataset = async (req, res) => {
 GET DATASET FOR ML SERVICE
 ==========================================================
 */
-
 module.exports.getMLDataset = async (req, res) => {
   try {
+    const companyId = req.headers["x-company-id"];
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Company ID is required for ML dataset access.",
+      });
+    }
+
     const page = Math.max(
       Number.parseInt(req.query.page || "1", 10),
       1
     );
 
     const limit = Math.min(
-      Math.max(
-        Number.parseInt(req.query.limit || "5000", 10),
-        1
-      ),
+      Math.max(Number.parseInt(req.query.limit || "5000", 10), 1),
       5000
     );
 
     const skip = (page - 1) * limit;
 
+    const filter = { companyId };
+
     const [documents, total] = await Promise.all([
-      Dataset.find({})
-        .select("-_id -createdAt -updatedAt")
+      Dataset.find(filter)
+        .select("-_id -createdAt -updatedAt -companyId -uploadedBy")
+        .sort({ date: 1, product: 1, storeId: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
 
-      Dataset.countDocuments({}),
+      Dataset.countDocuments(filter),
     ]);
 
     return res.status(200).json({
@@ -261,7 +269,6 @@ module.exports.getMLDataset = async (req, res) => {
     });
   }
 };
-
 /*
 ==========================================================
 CLEAN DUPLICATE DATASET RECORDS
