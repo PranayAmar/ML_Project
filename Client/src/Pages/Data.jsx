@@ -86,11 +86,10 @@ function Data() {
 
       const data = response.data;
 
-      if (data.success) {
-        setMessage(
-          data.message ||
-            `${data.insertedCount || 0} rows inserted successfully.`
-        );
+     if (data.success) {
+  setMessage(
+    `${data.message} Total rows: ${data.rowsReceived}. Duplicate rows removed: ${data.duplicateRowsSkipped}. Records stored: ${data.rowsInserted}.`
+  );
         setFile(null);
 
         const fileInput = document.getElementById("dataset-file");
