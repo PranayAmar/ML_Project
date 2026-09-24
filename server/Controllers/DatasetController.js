@@ -286,11 +286,23 @@ GET DATASET FOR ML SERVICE
 */
 module.exports.getMLDataset = async (req, res) => {
   try {
-    /*
-      This endpoint is already protected by MLAuthMiddleware.
-      The ML service is authenticated using x-ml-service-key,
-      so a browser/user company ID is not required here.
-    */
+    const companyId = req.query.companyId;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId is required.",
+      });
+    }
+
+    const mongoose = require("mongoose");
+
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid companyId.",
+      });
+    }
 
     const page = Math.max(
       Number.parseInt(req.query.page || "1", 10),
@@ -307,8 +319,12 @@ module.exports.getMLDataset = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
+    const filter = {
+      companyId: new mongoose.Types.ObjectId(companyId),
+    };
+
     const [documents, total] = await Promise.all([
-      Dataset.find({})
+      Dataset.find(filter)
         .select("-_id -createdAt -updatedAt -companyId -uploadedBy")
         .sort({
           date: 1,
@@ -319,7 +335,7 @@ module.exports.getMLDataset = async (req, res) => {
         .limit(limit)
         .lean(),
 
-      Dataset.countDocuments({}),
+      Dataset.countDocuments(filter),
     ]);
 
     return res.status(200).json({
