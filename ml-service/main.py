@@ -12,9 +12,8 @@ app = FastAPI(title="DemandForecast AI")
 
 NODE_API_URL = os.getenv("NODE_API_URL")
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
-
-CACHED_DF = None
-CACHE_LOADED_AT = 0
+CACHED_DF = {}
+CACHE_LOADED_AT = {}
 CACHE_TTL_SECONDS = 30 * 60
 # =========================================================
 # HEALTH CHECK
@@ -31,18 +30,25 @@ def health():
 # =========================================================
 # FETCH DATA FROM NODE BACKEND
 # =========================================================
-def fetch_dataset_from_node(force_refresh=False):
+def fetch_dataset_from_node(company_id, force_refresh=False):
     global CACHED_DF, CACHE_LOADED_AT
+
+    if not company_id:
+        raise RuntimeError(
+            "companyId is required to load a company dataset."
+        )
 
     now = time.time()
 
-    # Use cached dataframe when available
+    cached_df = CACHED_DF.get(company_id)
+    cached_at = CACHE_LOADED_AT.get(company_id, 0)
+
     if (
         not force_refresh
-        and CACHED_DF is not None
-        and now - CACHE_LOADED_AT < CACHE_TTL_SECONDS
+        and cached_df is not None
+        and now - cached_at < CACHE_TTL_SECONDS
     ):
-        return CACHED_DF.copy()
+        return cached_df.copy()
 
     if not NODE_API_URL:
         raise RuntimeError(
@@ -64,6 +70,7 @@ def fetch_dataset_from_node(force_refresh=False):
             params={
                 "page": page,
                 "limit": page_size,
+                "companyId": company_id,
             },
             headers={
                 "x-ml-service-key": ML_SERVICE_KEY,
@@ -112,12 +119,11 @@ def fetch_dataset_from_node(force_refresh=False):
 
         page += 1
 
-        # Avoid hammering the free Node service
         time.sleep(1)
 
     if not all_rows:
         raise RuntimeError(
-            "Node API returned an empty dataset."
+            "No dataset records found for this company."
         )
 
     df = pd.DataFrame(all_rows)
@@ -127,17 +133,24 @@ def fetch_dataset_from_node(force_refresh=False):
             "Dataset could not be converted into a dataframe."
         )
 
-    CACHED_DF = df.copy()
-    CACHE_LOADED_AT = time.time()
+    CACHED_DF[company_id] = df.copy()
+    CACHE_LOADED_AT[company_id] = time.time()
 
     return df.copy()
   
 # =========================================================
 # LOAD DATA
 # =========================================================
+def load_dataset(product=None, company_id=None):
+    if not company_id:
+        raise HTTPException(
+            status_code=400,
+            detail="companyId is required.",
+        )
 
-def load_dataset(product=None):
-    df = fetch_dataset_from_node()
+    df = fetch_dataset_from_node(
+        company_id=company_id
+    )
 
     if product:
         df = df[
@@ -425,9 +438,12 @@ def create_features(df):
 # =========================================================
 
 @app.get("/data-summary")
-def data_summary(product=None):
+def data_summary(
+    companyId: str = None,
+    product=None,
+):
     try:
-        df = load_dataset(product)
+        df = load_dataset(product, companyId)
         df = clean_dataset(df)
 
         return {
@@ -475,6 +491,7 @@ def data_summary(product=None):
 
 @app.get("/feature-preview")
 def feature_preview(
+    companyId: str = None,
     product=None,
     limit: int = 10,
 ):
@@ -484,8 +501,7 @@ def feature_preview(
                 status_code=400,
                 detail="limit must be between 1 and 100.",
             )
-
-        df = load_dataset(product)
+        df = load_dataset(product, companyId)
         df = clean_dataset(df)
         df = create_features(df)
 
