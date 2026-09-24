@@ -476,3 +476,47 @@ module.exports.cleanupDuplicateDatasets = async (req, res) => {
     });
   }
 };
+module.exports.getDatasetSummary = async (req, res) => {
+  try {
+    const companyId = req.user.userId;
+
+    const [count, products, stores, dateStats] = await Promise.all([
+      Dataset.countDocuments({ companyId }),
+
+      Dataset.distinct("product", { companyId }),
+
+      Dataset.distinct("storeId", { companyId }),
+
+      Dataset.aggregate([
+        {
+          $match: { companyId },
+        },
+        {
+          $group: {
+            _id: null,
+            start: { $min: "$date" },
+            end: { $max: "$date" },
+          },
+        },
+      ]),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      records: count,
+      products: products.sort(),
+      stores: stores.sort(),
+      dateRange: {
+        start: dateStats[0]?.start || null,
+        end: dateStats[0]?.end || null,
+      },
+    });
+  } catch (error) {
+    console.error("Dataset Summary Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch dataset summary.",
+    });
+  }
+};
