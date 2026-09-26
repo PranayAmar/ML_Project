@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
@@ -33,6 +33,45 @@ function Data() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const [datasetSummary, setDatasetSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
+  // =========================================================
+  // LOAD DATASET SUMMARY
+  // =========================================================
+
+  const loadDatasetSummary = async () => {
+    try {
+      setSummaryLoading(true);
+
+      const { data } = await axios.get(
+        `${API_BASE}/datasets/summary`,
+        {
+          withCredentials: true,
+        }
+      );
+
+      if (data.success) {
+        setDatasetSummary(data);
+      } else {
+        setDatasetSummary(null);
+      }
+    } catch (err) {
+      console.error("Dataset Summary Error:", err);
+      setDatasetSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDatasetSummary();
+  }, []);
+
+  // =========================================================
+  // FILE SELECTION
+  // =========================================================
+
   const handleFileChange = (e) => {
     const selectedFile = e.target.files?.[0];
 
@@ -58,6 +97,10 @@ function Data() {
 
     setFile(selectedFile);
   };
+
+  // =========================================================
+  // UPLOAD DATASET
+  // =========================================================
 
   const handleUpload = async () => {
     if (!file) {
@@ -86,18 +129,29 @@ function Data() {
 
       const data = response.data;
 
-     if (data.success) {
-  setMessage(
-    `${data.message} Total rows: ${data.rowsReceived}. Duplicate rows removed: ${data.duplicateRowsSkipped}. Records stored: ${data.rowsInserted}.`
-  );
+      if (data.success) {
+        const insertedRows =
+          data.rowsInserted ??
+          data.insertedCount ??
+          0;
+
+        setMessage(
+          `${data.message} ${insertedRows} rows inserted successfully.`
+        );
+
         setFile(null);
 
         const fileInput = document.getElementById("dataset-file");
+
         if (fileInput) {
           fileInput.value = "";
         }
+
+        await loadDatasetSummary();
       } else {
-        setError(data.message || "Dataset upload failed.");
+        setError(
+          data.message || "Dataset upload failed."
+        );
       }
     } catch (err) {
       console.error("Dataset Upload Error:", err);
@@ -111,12 +165,18 @@ function Data() {
     }
   };
 
+  // =========================================================
+  // CLEAN DUPLICATES
+  // =========================================================
+
   const handleCleanup = async () => {
     const confirmed = window.confirm(
       "This will remove duplicate records from your dataset. Continue?"
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
       setCleaning(true);
@@ -135,11 +195,18 @@ function Data() {
 
       if (data.success) {
         setMessage(
-          `${data.message} Deleted: ${data.deletedRecords} records. Remaining: ${data.remainingRecords} records.`
+          `${data.message} Deleted: ${
+            data.deletedRecords ?? 0
+          } records. Remaining: ${
+            data.remainingRecords ?? 0
+          } records.`
         );
+
+        await loadDatasetSummary();
       } else {
         setError(
-          data.message || "Unable to clean duplicate dataset records."
+          data.message ||
+            "Unable to clean duplicate dataset records."
         );
       }
     } catch (err) {
@@ -154,12 +221,40 @@ function Data() {
     }
   };
 
+  // =========================================================
+  // FORMAT DATE
+  // =========================================================
+
+  const formatDate = (value) => {
+    if (!value) {
+      return "-";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "-";
+    }
+
+    return date.toLocaleDateString();
+  };
+
+  // =========================================================
+  // UI
+  // =========================================================
+
   return (
     <div className="min-h-screen bg-[#050b18] text-white flex">
-      {/* SIDEBAR */}
+      {/* =====================================================
+          SIDEBAR
+      ====================================================== */}
+
       <aside className="hidden md:flex w-[255px] shrink-0 border-r border-white/10 bg-[#07101f] flex-col">
         <div className="px-6 py-6 border-b border-white/10">
-          <h1 className="text-xl font-bold text-white">DemandForecast AI</h1>
+          <h1 className="text-xl font-bold text-white">
+            DemandForecast AI
+          </h1>
+
           <p className="text-xs text-slate-500 mt-1">
             Demand intelligence platform
           </p>
@@ -225,10 +320,17 @@ function Data() {
         </nav>
       </aside>
 
-      {/* MAIN */}
+      {/* =====================================================
+          MAIN
+      ====================================================== */}
+
       <main className="flex-1 min-w-0">
         <div className="max-w-[1400px] mx-auto px-5 sm:px-7 lg:px-10 py-8">
-          {/* HEADER */}
+
+          {/* =================================================
+              HEADER
+          ================================================= */}
+
           <div className="mb-8">
             <p className="text-sm text-emerald-400 font-medium mb-2">
               DATA MANAGEMENT
@@ -239,13 +341,16 @@ function Data() {
             </h2>
 
             <p className="text-slate-400 mt-3 max-w-3xl leading-6">
-              Upload your historical sales dataset for demand forecasting.
-              The system will validate and process the data before it is used
-              for machine learning.
+              Upload your historical sales dataset for demand
+              forecasting. The system will validate and process
+              the data before it is used for machine learning.
             </p>
           </div>
 
-          {/* MOBILE NAV */}
+          {/* =================================================
+              MOBILE NAV
+          ================================================= */}
+
           <div className="md:hidden mb-6 overflow-x-auto">
             <div className="flex gap-2 min-w-max">
               <button
@@ -284,47 +389,156 @@ function Data() {
             </div>
           </div>
 
-          {/* DATASET QUALITY - ALWAYS VISIBLE */}
-<section className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-5 sm:p-6">
-  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
-    <div className="flex items-start gap-4">
-      <div className="w-11 h-11 shrink-0 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 text-xl">
-        ⚠
-      </div>
+          {/* =================================================
+              CURRENT DATASET SUMMARY
+          ================================================= */}
 
-      <div>
-          <h3 className="text-lg font-semibold text-white">
-          DATASET QUALITY CHECK TEST
-          </h3>
-        <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-          Remove duplicate records before model training to keep historical
-          demand data clean and prevent repeated observations.
-        </p>
-      </div>
-    </div>
+          <section className="mb-6 rounded-2xl border border-white/10 bg-[#07101f] p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+              <div>
+                <p className="text-sm text-emerald-400 font-medium">
+                  CURRENT DATASET
+                </p>
 
-    <button
-      type="button"
-      onClick={handleCleanup}
-      disabled={cleaning}
-      className="w-full sm:w-auto shrink-0 px-6 py-3 rounded-xl border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-    >
-      {cleaning ? "Cleaning..." : "Clean Duplicate Records"}
-    </button>
-  </div>
-</section>
+                <h3 className="text-xl font-semibold text-white mt-1">
+                  Dataset Overview
+                </h3>
+              </div>
 
-{/* GRID */}
+              <button
+                type="button"
+                onClick={loadDatasetSummary}
+                disabled={summaryLoading}
+                className="w-full sm:w-auto px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50 transition"
+              >
+                {summaryLoading ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+
+            {summaryLoading ? (
+              <div className="text-slate-500 text-sm">
+                Loading dataset information...
+              </div>
+            ) : datasetSummary ? (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+
+                {/* RECORDS */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                  <p className="text-xs text-slate-500">
+                    Records
+                  </p>
+
+                  <p className="text-2xl font-bold text-white mt-1">
+                    {datasetSummary.records?.toLocaleString() || 0}
+                  </p>
+                </div>
+
+                {/* PRODUCTS */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                  <p className="text-xs text-slate-500">
+                    Products
+                  </p>
+
+                  <p className="text-2xl font-bold text-white mt-1">
+                    {datasetSummary.products?.length || 0}
+                  </p>
+                </div>
+
+                {/* STORES */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                  <p className="text-xs text-slate-500">
+                    Stores
+                  </p>
+
+                  <p className="text-2xl font-bold text-white mt-1">
+                    {datasetSummary.stores?.length || 0}
+                  </p>
+                </div>
+
+                {/* DATE RANGE */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                  <p className="text-xs text-slate-500">
+                    Date Range
+                  </p>
+
+                  <p className="text-sm font-medium text-white mt-2">
+                    {formatDate(
+                      datasetSummary.dateRange?.start
+                    )}
+                  </p>
+
+                  <p className="text-xs text-slate-500 mt-1">
+                    to{" "}
+                    {formatDate(
+                      datasetSummary.dateRange?.end
+                    )}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm">
+                No dataset information available.
+              </p>
+            )}
+          </section>
+
+          {/* =================================================
+              DATASET QUALITY
+          ================================================= */}
+
+          <section className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 shrink-0 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 text-xl">
+                  ⚠
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Dataset Quality Check
+                  </h3>
+
+                  <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+                    Remove duplicate records before model training
+                    to keep historical demand data clean and prevent
+                    repeated observations from affecting evaluation.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCleanup}
+                disabled={cleaning}
+                className="w-full sm:w-auto shrink-0 px-6 py-3 rounded-xl border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {cleaning
+                  ? "Cleaning..."
+                  : "Clean Duplicate Records"}
+              </button>
+            </div>
+          </section>
+
+          {/* =================================================
+              UPLOAD + REQUIRED COLUMNS
+          ================================================= */}
+
           <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.9fr] gap-6">
+
             {/* UPLOAD CARD */}
             <section className="rounded-2xl border border-white/10 bg-[#07101f] p-6 sm:p-8">
+
               <div className="flex items-start gap-4 mb-7">
                 <div className="w-12 h-12 shrink-0 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl">
                   ↑
                 </div>
 
                 <div>
-                  <h3 className="text-xl font-semibold">Dataset Upload</h3>
+                  <h3 className="text-xl font-semibold">
+                    Dataset Upload
+                  </h3>
+
                   <p className="text-sm text-slate-500 mt-1">
                     CSV files only • Maximum 10 MB
                   </p>
@@ -356,23 +570,27 @@ function Data() {
                 />
               </label>
 
+              {/* SELECTED FILE */}
               {file && (
                 <div className="mt-4 rounded-xl border border-white/10 bg-slate-900/50 p-4">
-                  <p className="text-sm text-slate-300">Selected file</p>
+                  <p className="text-sm text-slate-300">
+                    Selected file
+                  </p>
+
                   <p className="text-sm text-emerald-400 mt-1 break-all">
                     {file.name}
                   </p>
                 </div>
               )}
 
-              {/* MESSAGE */}
+              {/* SUCCESS MESSAGE */}
               {message && (
                 <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-400">
                   {message}
                 </div>
               )}
 
-              {/* ERROR */}
+              {/* ERROR MESSAGE */}
               {error && (
                 <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-4 text-sm text-red-400">
                   {error}
@@ -386,49 +604,21 @@ function Data() {
                 disabled={!file || uploading}
                 className="w-full mt-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {uploading ? "Uploading Dataset..." : "Upload Dataset →"}
+                {uploading
+                  ? "Uploading Dataset..."
+                  : "Upload Dataset →"}
               </button>
-
-              {/* DATASET QUALITY */}
-              <div className="mt-8 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 shrink-0 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400">
-                    ⚠
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-white">
-                      Dataset Quality
-                    </h4>
-
-                    <p className="text-sm text-slate-400 mt-1 leading-6">
-                      Remove duplicate records before training the forecasting
-                      model. This prevents repeated historical observations
-                      from affecting model evaluation.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCleanup}
-                  disabled={cleaning}
-                  className="w-full mt-5 border border-orange-500/30 text-orange-400 hover:bg-orange-500/10 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-xl transition"
-                >
-                  {cleaning
-                    ? "Cleaning Dataset..."
-                    : "Clean Duplicate Records"}
-                </button>
-              </div>
             </section>
 
             {/* REQUIRED COLUMNS */}
             <section className="rounded-2xl border border-white/10 bg-[#07101f] p-6 sm:p-8">
-              <h3 className="text-xl font-semibold">Required CSV Columns</h3>
+              <h3 className="text-xl font-semibold">
+                Required CSV Columns
+              </h3>
 
               <p className="text-sm text-slate-500 mt-3 leading-6">
-                Your CSV should contain these columns for the forecasting
-                pipeline.
+                Your CSV should contain these columns for the
+                forecasting pipeline.
               </p>
 
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2">
@@ -437,7 +627,10 @@ function Data() {
                     key={column}
                     className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3"
                   >
-                    <span className="text-emerald-400">✓</span>
+                    <span className="text-emerald-400">
+                      ✓
+                    </span>
+
                     <span className="text-sm text-slate-300 break-all">
                       {column}
                     </span>
@@ -447,42 +640,73 @@ function Data() {
             </section>
           </div>
 
-          {/* PIPELINE INFO */}
+          {/* =================================================
+              PIPELINE INFO
+          ================================================= */}
+
           <section className="mt-6 rounded-2xl border border-white/10 bg-[#07101f] p-6 sm:p-8">
-            <h3 className="text-xl font-semibold">Forecasting Data Pipeline</h3>
+            <h3 className="text-xl font-semibold">
+              Forecasting Data Pipeline
+            </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+
               <div className="rounded-xl border border-white/10 bg-slate-900/30 p-5">
-                <div className="text-emerald-400 text-lg">01</div>
-                <h4 className="font-semibold mt-3">Upload</h4>
+                <div className="text-emerald-400 text-lg">
+                  01
+                </div>
+
+                <h4 className="font-semibold mt-3">
+                  Upload
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
                   Upload historical sales data in CSV format.
                 </p>
               </div>
 
               <div className="rounded-xl border border-white/10 bg-slate-900/30 p-5">
-                <div className="text-emerald-400 text-lg">02</div>
-                <h4 className="font-semibold mt-3">Validate</h4>
+                <div className="text-emerald-400 text-lg">
+                  02
+                </div>
+
+                <h4 className="font-semibold mt-3">
+                  Validate
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
                   Validate columns, dates, quantities and business factors.
                 </p>
               </div>
 
               <div className="rounded-xl border border-white/10 bg-slate-900/30 p-5">
-                <div className="text-emerald-400 text-lg">03</div>
-                <h4 className="font-semibold mt-3">Process</h4>
+                <div className="text-emerald-400 text-lg">
+                  03
+                </div>
+
+                <h4 className="font-semibold mt-3">
+                  Process
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
                   Generate historical and time-series forecasting features.
                 </p>
               </div>
 
               <div className="rounded-xl border border-white/10 bg-slate-900/30 p-5">
-                <div className="text-emerald-400 text-lg">04</div>
-                <h4 className="font-semibold mt-3">Predict</h4>
+                <div className="text-emerald-400 text-lg">
+                  04
+                </div>
+
+                <h4 className="font-semibold mt-3">
+                  Predict
+                </h4>
+
                 <p className="text-sm text-slate-500 mt-2">
                   Use processed data for model training and forecasting.
                 </p>
               </div>
+
             </div>
           </section>
         </div>
