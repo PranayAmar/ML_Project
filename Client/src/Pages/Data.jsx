@@ -225,20 +225,24 @@ function Data() {
   // FORMAT DATE
   // =========================================================
 
-  const formatDate = (value) => {
-    if (!value) {
-      return "-";
-    }
+const formatDate = (value) => {
+  if (!value) {
+    return "-";
+  }
 
-    const date = new Date(value);
+  const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-      return "-";
-    }
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
 
-    return date.toLocaleDateString();
-  };
-
+  return date.toLocaleDateString("en-IN", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
   // =========================================================
   // UI
   // =========================================================
